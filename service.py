@@ -32,8 +32,8 @@ def main():
                 elif event["op"] == 4:
                     recv_text_data(event["id"], event["data"])
                 else:
-                    LOGGER.warning("Received unrecognized event in listener loop: {}", event)
-        except Exception:
+                    LOGGER.warning("Received unrecognized event in listener loop: %s", event)
+        except Exception: # pylint: disable=broad-exception-caught
             LOGGER.warning("Exception in listener loop:\n%s", traceback.format_exc())
 
 def set_preset(user_id: UUID, preset: Dict[str, Any]):
