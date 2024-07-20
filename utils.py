@@ -5,7 +5,7 @@ import time
 import traceback
 from typing import Any, Dict, Tuple
 
-from numpy import np
+import numpy as np
 
 class CircularBuffer:
     def __init__(self, size: int, **kwargs) -> None:
@@ -83,7 +83,7 @@ class Cache:
         self._run_loop = True
         self._thread.start()
 
-    def __enter__(self) -> Cache:
+    def __enter__(self) -> "Cache":
         self.start()
         return self
 
@@ -104,7 +104,13 @@ class Cache:
                 min_ = min(self.items.items(), key=lambda x: x[1][0])
                 if min_[1][0] < datetime.now(timezone.utc):
                     # Remove expired items
-                    self.items.pop(min_[0])
+                    item = self.items.pop(min_[0])[1]
+
+                    # Release resources
+                    exit_method = getattr(item, "__exit__", None)
+                    if callable(exit_method):
+                        exit_method(item)
+
                     self.logger.debug("Removed expired item with key `%s`.", min_[0])
 
                 time.sleep(1)
