@@ -11,7 +11,6 @@ import numpy as np
 from ai.asr_processor import ASRProcessor
 from ai.text_gen_processor import TextGenProcessor
 from ai.tts_processor import TTSProcessor
-from db import ModelPreset
 from utils import Cache, CircularBuffer
 
 
@@ -23,7 +22,11 @@ class Pipeline:
     _cache = Cache()
     def __init__(
         self,
-        model_preset: ModelPreset,
+        asr_model_name: str,
+        tts_model_name: str,
+        tts_speaker_name: str,
+        text_gen_model_name: str,
+        text_gen_starting_context: Any,
         callback: Callable[[str, datetime, Any, Any], Any],
         **kwargs
     ) -> None:
@@ -34,16 +37,16 @@ class Pipeline:
         self.max_queue_audio_bytes = kwargs.pop("max_queue_audio_bytes", 16_000 * 100)
         self.max_queue_gen_chars = kwargs.pop("max_queue_gen_chars", 3000)\
 
-        asr_logger = kwargs.pop("asr_logger")
-        tts_logger = kwargs.pop("tts_logger")
-        text_gen_logger = kwargs.pop("text_gen_logger")
+        asr_logger = kwargs.pop("asr_logger", None)
+        tts_logger = kwargs.pop("tts_logger", None)
+        text_gen_logger = kwargs.pop("text_gen_logger", None)
 
         gpu = kwargs.get("device", "gpu") != "cpu"
 
         # Initialize STT
-        asr_cache_key = "asr/openai/whisper-base.en"
+        asr_cache_key = "asr/" + asr_model_name
         self.asr = ASRProcessor(
-            self._cache.get(asr_cache_key) or asr_cache_key,
+            self._cache.get(asr_cache_key) or asr_model_name,
             logger=asr_logger,
             **kwargs
         )
@@ -52,22 +55,22 @@ class Pipeline:
         self.asr_buffer = CircularBuffer(asr_buffer_size)
 
         # Initialize TTS
-        tts_cache_key = "tts/" + model_preset.tts_model_name
+        tts_cache_key = "tts/" + tts_model_name
         self.tts = TTSProcessor(
-            self._cache.get(tts_cache_key) or tts_cache_key,
+            self._cache.get(tts_cache_key) or tts_model_name,
             logger=tts_logger,
             gpu=gpu,
-            speaker_name=model_preset.tts_speaker_name,
+            speaker_name=tts_speaker_name,
             **kwargs
         )
         self._cache.add(tts_cache_key, self.tts.tts_wrapper)
 
         # Initialize text gen
-        text_gen_cache_key = "text_gen/" + model_preset.text_gen_model_name
+        text_gen_cache_key = "text_gen/" + text_gen_model_name
         self.text_gen = TextGenProcessor(
-            self._cache.get(text_gen_cache_key) or text_gen_cache_key,
+            self._cache.get(text_gen_cache_key) or text_gen_model_name,
             logger=text_gen_logger,
-            context=model_preset.text_gen_starting_context,
+            context=text_gen_starting_context,
             **kwargs
         )
         self._cache.add(text_gen_cache_key, self.text_gen.inference)
