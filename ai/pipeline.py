@@ -12,21 +12,21 @@ from ai.asr_processor import ASRProcessor
 from ai.text_gen_processor import TextGenProcessor
 from ai.tts_processor import TTSProcessor
 from db import ModelPreset
-from utils import CircularBuffer
+from utils import Cache, CircularBuffer
 
 
 sentence_end_regex = re.compile(r"[.?!][.?!\s]+")
 
 
 class Pipeline:
+    # TODO: figure out how to stop the cache loop
+    _cache = Cache()
     def __init__(
         self,
         model_preset: ModelPreset,
         callback: Callable[[str, datetime, Any, Any], Any],
         **kwargs
     ) -> None:
-        #TODO: Don't create new models for every connection
-
         # Start logger
         self.logger = kwargs.pop("logger", None) or logging.getLogger("pipeline")
 
@@ -41,30 +41,36 @@ class Pipeline:
         gpu = kwargs.get("device", "gpu") != "cpu"
 
         # Initialize STT
+        asr_cache_key = "asr/openai/whisper-base.en"
         self.asr = ASRProcessor(
-            "openai/whisper-base.en",
+            self._cache.get(asr_cache_key) or asr_cache_key,
             logger=asr_logger,
             **kwargs
         )
+        self._cache.add(asr_cache_key, self.asr.model)
         asr_buffer_size = self.asr_buffer_length * 16_000
         self.asr_buffer = CircularBuffer(asr_buffer_size)
 
         # Initialize TTS
+        tts_cache_key = "tts/" + model_preset.tts_model_name
         self.tts = TTSProcessor(
-            model_preset.tts_model_name,
+            self._cache.get(tts_cache_key) or tts_cache_key,
             logger=tts_logger,
             gpu=gpu,
             speaker_name=model_preset.tts_speaker_name,
             **kwargs
         )
+        self._cache.add(tts_cache_key, self.tts.tts_wrapper)
 
         # Initialize text gen
+        text_gen_cache_key = "text_gen/" + model_preset.text_gen_model_name
         self.text_gen = TextGenProcessor(
-            model=model_preset.text_gen_model_name,
+            self._cache.get(text_gen_cache_key) or text_gen_cache_key,
             logger=text_gen_logger,
             context=model_preset.text_gen_starting_context,
             **kwargs
         )
+        self._cache.add(text_gen_cache_key, self.text_gen.inference)
 
         self._run_thread = False
         self.queue: PriorityQueue[Tuple[
@@ -75,7 +81,6 @@ class Pipeline:
         self.callback = callback
         self.current_input = ""
         self._cancel_current = False
-
 
     def start(self):
         self._run_thread = True

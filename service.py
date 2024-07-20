@@ -6,6 +6,10 @@ from uuid import UUID
 import orjson
 
 from constants import AUTH_KEY, HOST, LOGGER, PORT
+from utils import Cache
+
+
+cache = Cache(LOGGER.getChild("cache"))
 
 
 def main():
@@ -37,10 +41,10 @@ def main():
             LOGGER.warning("Exception in listener loop:\n%s", traceback.format_exc())
 
 def set_preset(user_id: UUID, preset: Dict[str, Any]):
-    pass
+    cache.add(str(user_id), preset)
 
 def remove_preset(user_id: UUID):
-    pass
+    cache.remove(str(user_id))
 
 def recv_voice_data(user_id: UUID, data: bytes):
     pass

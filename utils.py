@@ -1,3 +1,10 @@
+from datetime import datetime, timedelta, timezone
+import logging
+from threading import Thread
+import time
+import traceback
+from typing import Any, Dict, Tuple
+
 from numpy import np
 
 class CircularBuffer:
@@ -37,3 +44,73 @@ class CircularBuffer:
 
     def get(self) -> np.ndarray:
         return self.buffer[:self.index]
+
+class Cache:
+    def __init__(self, logger: logging.Logger = None) -> None:
+        self.logger = logger or logging.getLogger("cache")
+        self.items: Dict[str, Tuple[datetime, Any]] = {}
+
+        self._thread = Thread(target=self._cache_loop)
+        self._run_loop = True
+
+    def __contains__(self, val: Any) -> bool:
+        return val in self.items
+
+    def __len__(self) -> int:
+        return len(self.items)
+
+    def __getitem__(self, indices: Any) -> Tuple[datetime, Any] | None:
+        return self.items[indices]
+
+    def get(self, key: str) -> Tuple[datetime, Any] | None:
+        return self.items.get(key)
+
+    def add(self, key: str, item: Any, ttl: timedelta = None):
+        if ttl is None:
+            ttl = timedelta(minutes=15)
+
+        expire_time = datetime.now(timezone.utc) + ttl
+        self.items[key] = (expire_time, item)
+        self.logger.debug("Item with key `%s` added, set to expire at %s.", key, expire_time)
+
+    def remove(self, key: str) -> bool:
+        if key in self.items:
+            del self.items[key]
+            return True
+        return False
+
+    def start(self) -> None:
+        self._run_loop = True
+        self._thread.start()
+
+    def __enter__(self) -> Cache:
+        self.start()
+        return self
+
+    def close(self) -> None:
+        self._run_loop = False
+        self._thread.join()
+
+    def __exit__(self, *args):
+        self.close()
+
+    def _cache_loop(self) -> None:
+        while self._run_loop:
+            try:
+                if len(self.items) == 0:
+                    time.sleep(1)
+                    continue
+
+                min_ = min(self.items.items(), key=lambda x: x[1][0])
+                if min_[1][0] < datetime.now(timezone.utc):
+                    # Remove expired items
+                    self.items.pop(min_[0])
+                    self.logger.debug("Removed expired item with key `%s`.", min_[0])
+
+                time.sleep(1)
+            except Exception: # pylint: disable=broad-exception-caught
+                self.logger.error(
+                    "Cache deletion loop failed with the following error:\n%s",
+                    traceback.format_exc()
+                )
+        self.logger.info("Exited cache loop.")
