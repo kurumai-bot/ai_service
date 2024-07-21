@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import itertools
 import logging
 import math
@@ -57,21 +58,25 @@ VISEME_INDEX_TO_NAME = {
 VISEME_NAME_TO_INDEX = {value: key for key, value in VISEME_INDEX_TO_NAME.items()}
 
 
+@dataclass(slots=True, repr=False, frozen=True)
 class Viseme:
+    index: int
+    name: str
+    weight: float
     # Let viseme argument be index or name and figure out based off that
     def __init__(self, viseme: str | int, weight: float = 1) -> None:
         if isinstance(viseme, str):
             try:
-                self.index = int(viseme)
-                self.name = VISEME_INDEX_TO_NAME[self.index]
+                object.__setattr__(self, "index", int(viseme))
+                object.__setattr__(self, "name", VISEME_INDEX_TO_NAME[self.index])
             except ValueError:
-                self.name = viseme
-                self.index = VISEME_NAME_TO_INDEX[self.name]
+                object.__setattr__(self, "name", viseme)
+                object.__setattr__(self, "index", VISEME_NAME_TO_INDEX[self.name])
         else:
-            self.index = viseme
-            self.name = VISEME_INDEX_TO_NAME[self.index]
+            object.__setattr__(self, "index", viseme)
+            object.__setattr__(self, "name", VISEME_INDEX_TO_NAME[self.index])
 
-        self.weight = weight
+        object.__setattr__(self, "weight", weight)
 
     def __repr__(self) -> str:
         return f"{self.name}:{self.weight:.2f}"

@@ -139,6 +139,7 @@ class Pipeline:
                 # Transcribe any audio and call respective callbacks
                 if not isinstance(data, str):
                     self.current_input = ("bytes", str(len(data)))
+                    # TODO: [asr] is timestamp needed?
                     self._call_callback("start", timestamp, self.current_input, callback_data)
 
                     # TODO: [asr] add timestamp to each transcription # eval if this is needed
