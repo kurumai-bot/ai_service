@@ -20,7 +20,7 @@ LOGGER.addHandler(stream_handler)
 if not path.isdir("logs"):
     os.mkdir("logs")
 file_handler = logging.FileHandler(
-    path.join("logs", datetime.now().strftime("%d-%m-%Y--%H-%M-%S") + ".log")
+    path.join("logs", datetime.now().strftime("%Y-%m-%d--%H-%M-%S") + ".log")
 )
 file_handler.setFormatter(LOGGER_FORMATTER)
 file_handler.setLevel(logging.DEBUG)
