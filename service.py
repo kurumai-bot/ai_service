@@ -3,7 +3,7 @@ from multiprocessing.connection import Listener
 from queue import Empty, Queue
 import traceback
 from typing import Any, Dict
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import orjson
 
@@ -59,11 +59,12 @@ def main():
             LOGGER.warning("Exception in listener loop:\n%s", traceback.format_exc())
 
 
-def set_preset(id: str, preset: Dict[str, Any]):
-    cached_pipeline = cache.get(id)
+def set_preset(user_id: str, preset: Dict[str, Any]):
+    LOGGER.debug("Received set preset for user: %s", user_id)
+    cached_pipeline = cache.get(user_id)
     if cached_pipeline is None or cached_pipeline[1][0] != preset["id"]:
         # TODO: Make pipeline creation multithreaded
-        pipeline = cache.get(id) or Pipeline(
+        pipeline = cache.get(user_id) or Pipeline(
             "openai/whisper-base.en",
             preset["tts_model_name"],
             preset["tts_speaker_name"],
@@ -75,19 +76,21 @@ def set_preset(id: str, preset: Dict[str, Any]):
     else:
         pipeline = cached_pipeline[1][1]
     pipeline.start()
-    cache.add(id, (preset["id"], pipeline))
+    cache.add(user_id, (preset["id"], pipeline))
 
-def remove_preset(id: str):
-    cache.remove(id)
+def remove_preset(user_id: str):
+    LOGGER.debug("Removing preset for user: %s", user_id)
+    cache.remove(user_id)
 
-def recv_voice_data(id: str, data: bytes):
-    cache.get(id)[1][1].process_input(data, datetime.now(timezone.utc), id)
+def recv_voice_data(user_id: str, data: bytes):
+    cache.get(user_id)[1][1].process_input(data, datetime.now(timezone.utc), user_id)
 
-def recv_text_data(id: str, data: str):
+def recv_text_data(user_id: str, data: str):
     # TODO: Error handling
-    cache.get(id)[1][1].process_input(data, datetime.now(timezone.utc), id)
+    LOGGER.debug("Received text for user: %s", user_id)
+    cache.get(user_id)[1][1].process_input(data, datetime.now(timezone.utc), user_id)
 
-def pipeline_callback(event: str, timestamp: datetime, result: Any, id: str):
+def pipeline_callback(event: str, timestamp: datetime, result: Any, user_id: str):
     if event == "start":
         opcode = 5
     elif event == "finish_asr":
@@ -103,24 +106,21 @@ def pipeline_callback(event: str, timestamp: datetime, result: Any, id: str):
 
     send_queue.put(orjson.dumps({
         "op": opcode,
-        "id": id,
+        "id": user_id,
         "timestamp": timestamp,
         "data": result
     }))
 
     # Send wav separately to save on serialization time
     if opcode == 7:
-        payload = bytearray(1 + len(id) + 1 + 32 + len(wav))
+        payload = bytearray(1 + 32 + 32 + len(wav))
         pos = 0
         payload[pos] = 8
 
         pos += 1
-        payload[pos:pos + len(id)] = bytes(id, encoding="ascii")
+        payload[pos:pos + 32] = UUID(user_id).bytes
 
-        pos += len(id)
-        payload[pos] = 0xFF
-
-        pos += 1
+        pos += 32
         payload[pos:pos + 32] = result["wav_id"].bytes
 
         pos += 32
