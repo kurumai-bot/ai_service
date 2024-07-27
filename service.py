@@ -110,11 +110,21 @@ def pipeline_callback(event: str, timestamp: datetime, result: Any, id: str):
 
     # Send wav separately to save on serialization time
     if opcode == 7:
-        payload = bytearray(1 + len(id) + 1 + len(wav))
-        payload[0] = 3
-        payload[1 : 1 + len(id)] = bytes(id)
-        payload[1 + len(id)] = 0xFF
-        payload[1 + len(id) + 1:] = wav.tobytes()
+        payload = bytearray(1 + len(id) + 1 + 32 + len(wav))
+        pos = 0
+        payload[pos] = 8
+
+        pos += 1
+        payload[pos:pos + len(id)] = bytes(id, encoding="ascii")
+
+        pos += len(id)
+        payload[pos] = 0xFF
+
+        pos += 1
+        payload[pos:pos + 32] = result["wav_id"].bytes
+
+        pos += 32
+        payload[pos:] = wav.tobytes()
         send_queue.put(bytes(payload))
 
 
