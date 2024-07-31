@@ -11,6 +11,7 @@ import numpy as np
 from ai.asr_processor import ASRProcessor
 from ai.text_gen_processor import TextGenProcessor
 from ai.tts_processor import TTSProcessor
+from constants import LOGGER
 from utils import Cache, CircularBuffer
 
 
@@ -19,7 +20,7 @@ sentence_end_regex = re.compile(r"[.?!][.?!\s]+")
 
 class Pipeline:
     # TODO: figure out how to stop the cache loop
-    _cache = Cache()
+    _cache = Cache(LOGGER.getChild("pipeline_cache"))
     def __init__(
         self,
         asr_model_name: str,
@@ -46,7 +47,7 @@ class Pipeline:
         # Initialize STT
         asr_cache_key = "asr/" + asr_model_name
         self.asr = ASRProcessor(
-            self._cache.get(asr_cache_key) or asr_model_name,
+            self._cache.get_item(asr_cache_key) or asr_model_name,
             logger=asr_logger,
             **kwargs
         )
@@ -57,7 +58,7 @@ class Pipeline:
         # Initialize TTS
         tts_cache_key = "tts/" + tts_model_name
         self.tts = TTSProcessor(
-            self._cache.get(tts_cache_key) or tts_model_name,
+            self._cache.get_item(tts_cache_key) or tts_model_name,
             logger=tts_logger,
             gpu=gpu,
             speaker_name=tts_speaker_name,
@@ -68,7 +69,7 @@ class Pipeline:
         # Initialize text gen
         text_gen_cache_key = "text_gen/" + text_gen_model_name
         self.text_gen = TextGenProcessor(
-            self._cache.get(text_gen_cache_key) or text_gen_model_name,
+            self._cache.get_item(text_gen_cache_key) or text_gen_model_name,
             logger=text_gen_logger,
             context=text_gen_starting_context,
             **kwargs

@@ -65,6 +65,12 @@ class Cache:
     def get(self, key: str) -> Tuple[datetime, Any] | None:
         return self.items.get(key)
 
+    def get_item(self, key: str) -> Any | None:
+        entry = self.get(key)
+        if entry is not None:
+            return entry[1]
+        return None
+
     def add(self, key: str, item: Any, ttl: timedelta = None):
         if ttl is None:
             ttl = timedelta(minutes=15)
