@@ -58,6 +58,9 @@ class TextGenProcessor:
                 self.inference = TransformersInference(model, **kwargs)
         else:
             self.inference = model
+            model_name = self.inference.model
+            if model_name.startswith("gpt-3.5") or model_name.startswith("gpt-4"):
+                self.context = [{"role": "system", "content": self.context}]
 
         self.logger.info(
             "Text Gen Processor initialized with model `%s`.",
@@ -267,7 +270,6 @@ class TransformersInference(TextGenInference[str]):
         **kwargs
     ) -> Generator[str, T, None] | Tuple[str, T]:
         prompt = self.human_string + prompt + self.robot_string
-        print(context)
 
         # Return the streamer and start the pipeline in a diff thread
         if kwargs.pop("stream", False):
