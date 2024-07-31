@@ -72,6 +72,7 @@ def set_preset(user_id: str, preset: Dict[str, Any]):
             preset["text_gen_starting_context"],
             pipeline_callback,
             openai_api_key=OPENAI_API_KEY,
+            logger=LOGGER.getChild("pipeline")
         )
     else:
         pipeline = cached_pipeline[1][1]

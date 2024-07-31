@@ -38,9 +38,9 @@ class Pipeline:
         self.max_queue_audio_bytes = kwargs.pop("max_queue_audio_bytes", 16_000 * 100)
         self.max_queue_gen_chars = kwargs.pop("max_queue_gen_chars", 3000)\
 
-        asr_logger = kwargs.pop("asr_logger", None)
-        tts_logger = kwargs.pop("tts_logger", None)
-        text_gen_logger = kwargs.pop("text_gen_logger", None)
+        asr_logger = kwargs.pop("asr_logger", self.logger.getChild("asr"))
+        tts_logger = kwargs.pop("tts_logger", self.logger.getChild("tts"))
+        text_gen_logger = kwargs.pop("text_gen_logger", self.logger.getChild("gen"))
 
         gpu = kwargs.get("device", "gpu") != "cpu"
 
