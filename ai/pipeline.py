@@ -198,8 +198,12 @@ class Pipeline:
                             # In the unlikely chance that tts creates multiple outputs (due to the
                             # difference in how sentences are detected) then combine
                             expressions = []
+                            wav_length = 0.0
                             for tts_output in tts_outputs:
-                                expressions.extend(tts_output["expressions"])
+                                for expression in tts_output["expressions"]:
+                                    expression = (expression[0] + wav_length, expression[1])
+                                    expressions.append(expression)
+                                wav_length += tts_output["expressions"][-1][0] + 0.5
                             wavs = [tts_output["wav"] for tts_output in tts_outputs]
                             res = {
                                 "wav": np.concatenate(wavs),
