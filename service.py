@@ -92,18 +92,19 @@ def recv_text_data(user_id: str, data: str):
     cache.get(user_id)[1][1].process_input(data, datetime.now(timezone.utc), user_id)
 
 def pipeline_callback(event: str, timestamp: datetime, result: Any, user_id: str):
-    if event == "start":
-        opcode = 5
-    elif event == "finish_asr":
-        opcode = 6
-    elif event == "finish_gen":
-        opcode = 7
-        wav = result.pop("wav")
-        result["wav_id"] = uuid4()
-    elif event == "finish":
-        opcode = 9
-    else:
-        raise ValueError("Unrecognized event in pipeline callback: " + event)
+    match event:
+        case "start":
+            opcode = 5
+        case "finish_asr":
+            opcode = 6
+        case "finish_gen":
+            opcode = 7
+            wav = result.pop("wav")
+            result["wav_id"] = uuid4()
+        case "finish":
+            opcode = 9
+        case _:
+            raise ValueError("Unrecognized event in pipeline callback: " + event)
 
     send_queue.put(orjson.dumps({
         "op": opcode,
