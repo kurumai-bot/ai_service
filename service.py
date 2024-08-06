@@ -33,7 +33,7 @@ def main():
                     pass
 
                 # Read incoming bytes
-                if not connection.poll(1):
+                if not connection.poll(0.01):
                     continue
 
                 payload = connection.recv_bytes()
@@ -43,7 +43,7 @@ def main():
                 LOGGER.info("Reconnected to backend")
 
             if payload[0] == 3:
-                pass
+                recv_voice_data(str(UUID(bytes=payload[1:17])), payload[17:])
             else:
                 event = orjson.loads(payload)
 
@@ -83,6 +83,8 @@ def remove_preset(user_id: str):
     LOGGER.debug("Removing preset for user: %s", user_id)
     cache.remove(user_id)
 
+# TODO: cache entry may expire while user is still connected. fix this pls
+# TODO: pipeline may not exist sometimes, add some way to handle that
 def recv_voice_data(user_id: str, data: bytes):
     cache.get(user_id)[1][1].process_input(data, datetime.now(timezone.utc), user_id)
 

@@ -70,8 +70,9 @@ class ASRProcessor:
     ) -> None:
         self.logger = kwargs.pop("logger", None) or logging.getLogger("asr")
 
-        self.vad_chunk_length: float = kwargs.pop("vad_chunk_length", 0.25)
-        self.vad_confidence_threshhold: float = kwargs.pop("vad_confidence_threshhold", 0.4)
+        # self.vad_chunk_length: float = kwargs.pop("vad_chunk_length", 0.25)
+        self.vad_confidence_threshhold: float = kwargs.pop("vad_confidence_threshhold", 0.7)
+        self.min_silence_time: float = kwargs.pop("min_silence_time", 0.25)
 
         # Initialize STT
         self.model: LiveASRInference = None
@@ -84,9 +85,10 @@ class ASRProcessor:
             self.model = model
 
         # Start VAD
-        if type(self).vad is None:
-            type(self).vad = SileroVAD()
-        self.vad_chunk_size = math.ceil(self.vad_chunk_length * 16_000)
+        if self.vad is None:
+            self.vad = SileroVAD()
+        self.vad_chunk_size = 512 # math.ceil(self.vad_chunk_length * 16_000)
+        self._silence_time = 0.0
 
         self.logger.info(
             "ASR Processor initialized with model `%s`.",
@@ -104,36 +106,36 @@ class ASRProcessor:
 
         # Loop in vad chunk lengths, and check if they're speech
         i = 0
-        last_chunk = None
         while i < len(float_array):
-            # Also include if the next chunk will be smaller than the minimum chunk size
-            if i + self.vad_chunk_size + (0.03 * 16_000) >= len(float_array):
-                chunk = np.copy(float_array[i:])
+            # Also include if chunk will be smaller than the minimum chunk size
+            if i + self.vad_chunk_size >= len(float_array):
+                # TODO: Padding chunks with 0 will almost always make them not be considered speech,
+                #       so consider limiting mic packets to having a multiple of 512 samples
+                chunk = np.zeros(self.vad_chunk_size, dtype=np.float32)
+                chunk[0:len(float_array) - i] = float_array[i:]
                 i = len(float_array)
             else:
                 chunk = np.copy(float_array[i:i + self.vad_chunk_size])
                 i += self.vad_chunk_size
 
             # Check if it is speech, if so add it to the buffer
-            confidence = type(self).vad.get_chunk_confidence(chunk)
+            confidence = self.vad.get_chunk_confidence(chunk)
+
             if confidence >= self.vad_confidence_threshhold:
                 # TODO: Implement batching for perf gains
-                # Add last chunk since the vad tends to give really low confidences for leadings
-                # sounds
-                self.logger.debug("Transcribing buffer...")
-                if last_chunk is not None:
-                    for full_buffer in buffer.add(last_chunk):
-                        transcriptions.append(self.model.transcribe_buffer(full_buffer))
-
                 for full_buffer in buffer.add(chunk):
+                    self.logger.debug("Transcribing buffer (full)...")
                     transcriptions.append(self.model.transcribe_buffer(full_buffer))
+
+                self._silence_time = 0
             # If not, then clear the buffer and put whatever was in there into the queue
-            elif buffer.index > 0:
-                self.logger.debug("Transcribing buffer...")
+            elif self._silence_time >= self.min_silence_time and buffer.index > 0:
+                self.logger.debug("Transcribing buffer (silent)...")
                 transcriptions.append(self.model.transcribe_buffer(buffer.get()))
                 buffer.clear()
-
-            last_chunk = chunk
+                self._silence_time = 0
+            else:
+                self._silence_time += 512 / 16000
 
         # TODO: Test if there needs to be a diff join string here
         return "".join(transcriptions)
@@ -161,7 +163,7 @@ class Whisper(LiveASRInference):
         )
 
     def transcribe_buffer(self, buffer: np.ndarray) -> str:
-        transcription = self.speech_recognition_pipeline(buffer, max_new_tokens=10_000)
+        transcription = self.speech_recognition_pipeline(buffer)
 
         return transcription["text"]
 
