@@ -2,6 +2,7 @@ import logging
 from threading import Thread
 from typing import Generator, Generic, List, Tuple, TypeVar
 
+import guidance.chat
 from openai import Client
 import tiktoken
 import torch
@@ -42,7 +43,7 @@ class TextGenProcessor:
     def __init__(self, model: str | TextGenInference, **kwargs) -> None:
         self.logger = kwargs.pop("logger", None) or logging.getLogger("text_gen")
 
-        self.max_context_tokens: int = kwargs.pop("max_context_tokens", 100)
+        self.max_context_tokens: int = kwargs.pop("max_context_tokens", 500)
         self.context = kwargs.pop("context", "")
 
         # Initialize inference
@@ -324,8 +325,6 @@ class TransformersInference(TextGenInference[str]):
 
 
 if __name__ == "__main__":
-    with open("secrets", "r", encoding="utf-8") as secrets_file:
-        OPENAI_API_KEY = secrets_file.readline().removesuffix("\n")
     processor = TextGenProcessor("georgesung/llama2_7b_chat_uncensored", human_string="\n\n### HUMAN:\n", robot_string="\n\n### RESPONSE:\n", max_context_tokens=1000, openai_api_key=OPENAI_API_KEY, device=0)
     processor.context = """Enter RP mode. Pretend to be a college frat boy.
 
