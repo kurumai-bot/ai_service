@@ -8,7 +8,7 @@ from uuid import UUID, uuid4
 import orjson
 
 from ai import Pipeline
-from constants import AUTH_KEY, HOST, LOGGER, OPENAI_API_KEY, PORT
+from constants import AUTH_KEY, HF_API_KEY, HOST, LOGGER, OPENAI_API_KEY, PORT
 from utils import Cache
 
 
@@ -41,6 +41,7 @@ def main():
                 LOGGER.warning("Backend disconnected from socket. Attempting reconnect...")
                 connection = listener.accept()
                 LOGGER.info("Reconnected to backend")
+                continue
 
             if payload[0] == 3:
                 recv_voice_data(str(UUID(bytes=payload[1:17])), payload[17:])
@@ -72,6 +73,7 @@ def set_preset(user_id: str, preset: Dict[str, Any]):
             preset["text_gen_starting_context"],
             pipeline_callback,
             openai_api_key=OPENAI_API_KEY,
+            hf_api_key=HF_API_KEY,
             logger=LOGGER.getChild("pipeline")
         )
     else:

@@ -160,25 +160,8 @@ class Pipeline:
 
                 # Generate AI response and TTS data
                 # TODO: [generation] support streaming and kwargs
-                ai_output = ""
-                iterator = iter(self.text_gen.generate_from_prompt(data, stream=True))
-                token = next(iterator, None)
-                while token is not None:
-                    ai_output += token
-                    token = next(iterator, None)
-
-                    # TODO: add support for eosen token
-                    # If there is no next token (the sequence has ended), process the rest of
-                    # the remaining tokens
-                    if token is None:
-                        sentence = ai_output
-                    # else wait until a full sentence has been generated
-                    elif (match := re.search(sentence_end_regex, ai_output)) is not None:
-                        match_end = match.end()
-                        sentence = ai_output[:match_end].rstrip()
-                        ai_output = ai_output[match_end:]
-                    else:
-                        continue
+                for message in self.text_gen.generate_from_prompt(data, stream=True):
+                    sentence = message["message"]
 
                     # TODO: Consider sending just a message with whitespace rather than skip the
                     # event.
@@ -191,8 +174,10 @@ class Pipeline:
                         if len(tts_outputs) == 1:
                             res = {
                                 "wav": tts_outputs[0]["wav"],
+                                # TODO: Consider renaming this (visemes makes more sense)
                                 "expressions": tts_outputs[0]["expressions"],
-                                "text": sentence
+                                "text": sentence,
+                                "emotion": message["emotion"]
                             }
                         else:
                             # In the unlikely chance that tts creates multiple outputs (due to the

@@ -34,3 +34,5 @@ PORT = 8079
 with open("secrets", "r", encoding="utf-8") as secrets_file:
     AUTH_KEY = secrets_file.readline().removesuffix("\n").encode()
     OPENAI_API_KEY = secrets_file.readline().removesuffix("\n")
+    HF_API_KEY = secrets_file.readline().removesuffix("\n")
+    os.environ["HF_TOKEN"] = HF_API_KEY
