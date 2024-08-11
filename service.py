@@ -6,6 +6,7 @@ from typing import Any, Dict
 from uuid import UUID, uuid4
 
 import orjson
+import torch
 
 from ai import Pipeline
 from constants import AUTH_KEY, HF_API_KEY, HOST, LOGGER, OPENAI_API_KEY, PORT
@@ -74,7 +75,10 @@ def set_preset(user_id: str, preset: Dict[str, Any]):
             pipeline_callback,
             openai_api_key=OPENAI_API_KEY,
             hf_api_key=HF_API_KEY,
-            logger=LOGGER.getChild("pipeline")
+            logger=LOGGER.getChild("pipeline"),
+            low_cpu_mem_usage=True,
+            device_map="cuda:0",
+            torch_dtype=torch.float16,
         )
     else:
         pipeline = cached_pipeline[1][1]
