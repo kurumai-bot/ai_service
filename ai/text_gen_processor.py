@@ -87,12 +87,10 @@ class TextGenProcessor:
             if model_type == "openai":
                 self._model = OpenAI(model_name, api_key=openai_api_key, **kwargs)
             elif model_type == "transformers":
-                quantization_config = BitsAndBytesConfig(load_in_8bit=True)
                 self._model = Transformers(
                     model_name,
                     chat_template=chat_template,
                     token=hf_api_key,
-                    quantization_config=quantization_config,
                     **kwargs
                 )
             elif model_type == "llamacpp":

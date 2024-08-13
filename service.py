@@ -78,7 +78,7 @@ def set_preset(user_id: str, preset: Dict[str, Any]):
             logger=LOGGER.getChild("pipeline"),
             low_cpu_mem_usage=True,
             device_map="cuda:0",
-            torch_dtype=torch.float16,
+            torch_dtype=torch.float16
         )
     else:
         pipeline = cached_pipeline[1][1]
