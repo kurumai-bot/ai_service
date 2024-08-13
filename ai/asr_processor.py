@@ -1,9 +1,9 @@
 import logging
-import math
-from typing import List, Union
+from typing import Union
 
 import numpy as np
 import numpy.typing as npt
+import silero_vad
 import soundfile
 import torch
 from transformers import (
@@ -14,38 +14,6 @@ from transformers import (
 )
 
 from utils import CircularBuffer
-
-
-class SileroVAD:
-    def __init__(self) -> None:
-        self.model, self.utils = torch.hub.load(
-            repo_or_dir="snakers4/silero-vad",
-            model="silero_vad",
-            force_reload=True
-        )
-
-    def get_speech_timestamps(self):
-        return self.utils[0]()
-
-    def save_audio(self, path: str, tensor: torch.Tensor, sampling_rate: int = 16_000):
-        return self.utils[1](path, tensor, sampling_rate)
-
-    def read_audio(self, path: str, sampling_rate: int = 16_000):
-        return self.utils[2](path, sampling_rate)
-
-    def collect_chunks(self, tss: List[dict], wav: torch.Tensor):
-        return self.utils[4](tss, wav)
-
-    def get_chunk_confidence(
-        self,
-        audio: Union[npt.NDArray[np.float32], bytes],
-        sampling_rate: int = 16_000,
-    ) -> float:
-        if isinstance(audio, bytes):
-            return self.model(
-                torch.frombuffer(audio, dtype=torch.float32), sampling_rate
-            ).item()
-        return self.model(torch.from_numpy(audio), sampling_rate).item()
 
 
 class LiveASRInference:
@@ -61,7 +29,7 @@ class LiveASRInference:
 
 
 class ASRProcessor:
-    vad: SileroVAD = None
+    vad = None
 
     def __init__(
         self,
@@ -85,8 +53,7 @@ class ASRProcessor:
             self.model = model
 
         # Start VAD
-        if self.vad is None:
-            self.vad = SileroVAD()
+        self.vad = silero_vad.load_silero_vad()
         self.vad_chunk_size = 512 # math.ceil(self.vad_chunk_length * 16_000)
         self._silence_time = 0.0
 
@@ -119,7 +86,7 @@ class ASRProcessor:
                 i += self.vad_chunk_size
 
             # Check if it is speech, if so add it to the buffer
-            confidence = self.vad.get_chunk_confidence(chunk)
+            confidence = self._get_chunk_confidence(chunk)
 
             if confidence >= self.vad_confidence_threshhold:
                 # TODO: Implement batching for perf gains
@@ -139,6 +106,17 @@ class ASRProcessor:
 
         # TODO: Test if there needs to be a diff join string here
         return "".join(transcriptions)
+
+    def _get_chunk_confidence(
+        self,
+        audio: Union[npt.NDArray[np.float32], bytes],
+        sampling_rate: int = 16_000,
+    ) -> float:
+        if isinstance(audio, bytes):
+            return self.vad(
+                torch.frombuffer(audio, dtype=torch.float32), sampling_rate
+            ).item()
+        return self.vad(torch.from_numpy(audio), sampling_rate).item()
 
 
 # NOTE: Whisper.cpp is not used here because the Python bindings linked in the readme at time of
