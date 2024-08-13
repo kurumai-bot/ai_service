@@ -157,6 +157,7 @@ class TextGenProcessor:
                     # and ignore role stuff. No, capture doesn't work as it seems to be bugged and
                     # includes role tags in the output and truncates because of the role tags
                     context_len += self._model._current_prompt()[context_len:].find("{")
+                    print(self._model._current_prompt()[context_len:])
                     response = orjson.loads(self._model._current_prompt()[context_len:])
                     context_len = len(self._model._current_prompt())
 
@@ -165,8 +166,8 @@ class TextGenProcessor:
 
                     yield response
 
-        if kwargs.pop("kwargs", False):
-            return generator
+        if kwargs.pop("stream", False):
+            return generator()
         else:
             return list(generator())
 
