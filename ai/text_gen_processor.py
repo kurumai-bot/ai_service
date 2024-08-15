@@ -1,7 +1,8 @@
+from enum import Enum
 import logging
 from typing import Any, Generator, Type
 
-from guidance import assistant, capture, gen, guidance, select, system, user, with_temperature
+from guidance import assistant, capture, gen, guidance, json, select, system, user, with_temperature
 from guidance.chat import (
     ChatTemplate,
     Llama2ChatTemplate,
@@ -15,7 +16,7 @@ from guidance.models._openai import OpenAIEngine
 from guidance.models.llama_cpp._llama_cpp import LlamaCppEngine
 from guidance.models.transformers._transformers import TransformersEngine
 import orjson
-from transformers import BitsAndBytesConfig
+from pydantic import BaseModel
 
 
 # T = TypeVar("T")
@@ -41,6 +42,19 @@ from transformers import BitsAndBytesConfig
 
 #     def trim_context(self, context: T, token_limit: int = 1_000) -> T:
 #         pass
+
+
+class Emotion(str, Enum):
+    happy = "happy",
+    sad = "sad",
+    angry = "angry",
+    neutral = "neutral"
+
+
+class Response(BaseModel):
+    emotion: Emotion
+    message: str
+    done_talking: bool
 
 
 # TODO: Experiment with per word or timed emotions
@@ -145,24 +159,15 @@ class TextGenProcessor:
 
         def generator():
             with assistant():
-                context_len = len(self._model._current_prompt())
                 user_response_needed = False
                 while not user_response_needed:
                     
                     # Gen new text
-                    self._model += with_temperature(json_gen(temperature=temperature), temperature)
+                    self._model += json(name="response", schema=Response, temperature=temperature)
+                    response = orjson.loads(self._model["response"])
 
-                    # Get only new text
-                    # TODO: This isn't very robust, so figure out a way to get only new text
-                    # and ignore role stuff. No, capture doesn't work as it seems to be bugged and
-                    # includes role tags in the output and truncates because of the role tags
-                    context_len += self._model._current_prompt()[context_len:].find("{")
-                    print(self._model._current_prompt()[context_len:])
-                    response = orjson.loads(self._model._current_prompt()[context_len:])
-                    context_len = len(self._model._current_prompt())
-
-                    # Clean json obj
-                    user_response_needed = response.pop("user_response_needed")
+                    # Clean response object
+                    user_response_needed = response.pop("done_talking")
 
                     yield response
 
