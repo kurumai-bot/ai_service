@@ -160,16 +160,22 @@ class Pipeline:
 
                 # Generate AI response and TTS data
                 # TODO: [generation] support streaming and kwargs
+                previous_messages = set()
                 for response in self.text_gen.generate_from_prompt(data, stream=True):
-                    sentence = response["message"]
+                    message = response["message"]
 
                     # TODO: Consider sending just a message with whitespace rather than skip the
                     # event.
-                    if sentence == "" or sentence.isspace():
+                    if message == "" or message.isspace():
                         continue
 
+                    # Prevent ai from generating same message twice in the same response
+                    if message in previous_messages:
+                        break
+                    previous_messages.add(message)
+
                     try:
-                        tts_outputs = self.tts.tts(sentence)
+                        tts_outputs = self.tts.tts(message)
 
                         if len(tts_outputs) == 1:
                             wav = tts_outputs[0]["wav"]
@@ -190,7 +196,7 @@ class Pipeline:
                             "wav": wav,
                             # TODO: Consider renaming this (visemes makes more sense)
                             "expressions": expressions,
-                            "text": sentence,
+                            "text": message,
                             "emotion": response["emotion"]
                         }
 
@@ -202,7 +208,7 @@ class Pipeline:
                     except Exception: # pylint: disable=broad-exception-caught
                         self.logger.error(
                             "Error processing TTS with input `%s`:\n%s",
-                            sentence,
+                            message,
                             traceback.format_exc()
                         )
                 self._call_callback("finish", datetime.utcnow(), None, callback_data)
