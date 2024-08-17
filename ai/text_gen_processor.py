@@ -54,7 +54,7 @@ class Emotion(str, Enum):
 class Response(BaseModel):
     emotion: Emotion
     message: str
-    done_talking: bool
+    should_ask_for_user_response: bool
 
 
 # TODO: Experiment with per word or timed emotions
@@ -167,7 +167,7 @@ class TextGenProcessor:
                     response = orjson.loads(self._model["response"])
 
                     # Clean response object
-                    user_response_needed = response.pop("done_talking")
+                    user_response_needed = response.pop("should_ask_for_user_response")
 
                     yield response
 
