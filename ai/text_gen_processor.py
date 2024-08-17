@@ -160,16 +160,22 @@ class TextGenProcessor:
         def generator():
             with assistant():
                 user_response_needed = False
+                model_no_json = self._model
                 while not user_response_needed:
                     
                     # Gen new text
                     self._model += json(name="response", schema=Response, temperature=temperature)
                     response = orjson.loads(self._model["response"])
 
+                    # Create a copy of the prompt without json tokens, making token count more 
+                    # efficient and speeding up generation
+                    model_no_json += response["message"]
+
                     # Clean response object
                     user_response_needed = response.pop("should_ask_for_user_response")
 
                     yield response
+                self._model = model_no_json
 
         if kwargs.pop("stream", False):
             return generator()
