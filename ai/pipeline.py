@@ -160,8 +160,8 @@ class Pipeline:
 
                 # Generate AI response and TTS data
                 # TODO: [generation] support streaming and kwargs
-                for message in self.text_gen.generate_from_prompt(data, stream=True):
-                    sentence = message["message"]
+                for response in self.text_gen.generate_from_prompt(data, stream=True):
+                    sentence = response["message"]
 
                     # TODO: Consider sending just a message with whitespace rather than skip the
                     # event.
@@ -172,16 +172,11 @@ class Pipeline:
                         tts_outputs = self.tts.tts(sentence)
 
                         if len(tts_outputs) == 1:
-                            res = {
-                                "wav": tts_outputs[0]["wav"],
-                                # TODO: Consider renaming this (visemes makes more sense)
-                                "expressions": tts_outputs[0]["expressions"],
-                                "text": sentence,
-                                "emotion": message["emotion"]
-                            }
+                            wav = tts_outputs[0]["wav"]
+                            expressions = tts_outputs[0]["expressions"]
                         else:
-                            # In the unlikely chance that tts creates multiple outputs (due to the
-                            # difference in how sentences are detected) then combine
+                            # If a response has multiple sentences, tts will split it into an output
+                            # per sentence, so just combine the ouptputs
                             expressions = []
                             wav_length = 0.0
                             for tts_output in tts_outputs:
@@ -189,12 +184,15 @@ class Pipeline:
                                     expression = (expression[0] + wav_length, expression[1])
                                     expressions.append(expression)
                                 wav_length += tts_output["expressions"][-1][0] + 0.5
-                            wavs = [tts_output["wav"] for tts_output in tts_outputs]
-                            res = {
-                                "wav": np.concatenate(wavs),
-                                "expressions": expressions,
-                                "text": sentence
-                            }
+                            wav = np.concatenate([tts_output["wav"] for tts_output in tts_outputs])
+
+                        res = {
+                            "wav": wav,
+                            # TODO: Consider renaming this (visemes makes more sense)
+                            "expressions": expressions,
+                            "text": sentence,
+                            "emotion": response["emotion"]
+                        }
 
                         if self._cancel_current:
                             self._cancel_current = True
