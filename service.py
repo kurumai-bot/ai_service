@@ -89,13 +89,21 @@ def remove_preset(user_id: str):
     LOGGER.debug("Removing preset for user: %s", user_id)
     cache.remove(user_id)
 
-# TODO: cache entry may expire while user is still connected. fix this pls
+# TODO: cache entry may expire while user is still connected. handle this better
 # TODO: pipeline may not exist sometimes, add some way to handle that
+# TODO: I don't want to deal with refactoring again but user id is probably not the right name here
+# TODO: probably rethink error codes/standardize them at some point
 def recv_voice_data(user_id: str, data: bytes):
+    if cache.get(user_id) is None:
+        send_error(user_id, 0)
+        return
     cache.get(user_id)[1][1].process_input(data, datetime.now(timezone.utc), user_id)
 
 def recv_text_data(user_id: str, data: str):
     # TODO: Error handling
+    if cache.get(user_id) is None:
+        send_error(user_id, 0)
+        return
     LOGGER.debug("Received text for user: %s", user_id)
     cache.get(user_id)[1][1].process_input(data, datetime.now(timezone.utc), user_id)
 
@@ -136,6 +144,15 @@ def pipeline_callback(event: str, timestamp: datetime, result: Any, user_id: str
         pos += 16
         payload[pos:] = wav.tobytes()
         send_queue.put(bytes(payload))
+
+
+def send_error(user_id: str, error_code: int) -> None:
+    send_queue.put(orjson.dumps({
+        "op": 0,
+        "id": user_id,
+        "timestamp": datetime.now(timezone.utc),
+        "data": error_code
+    }))
 
 
 if __name__ == "__main__":
