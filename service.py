@@ -3,7 +3,7 @@ from multiprocessing.connection import Listener
 from queue import Empty, Queue
 import traceback
 from typing import Any, Dict
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import orjson
 import torch
@@ -45,7 +45,8 @@ def main():
                 continue
 
             if payload[0] == 3:
-                recv_voice_data(str(UUID(bytes=payload[1:17])), payload[17:])
+                sep = payload.index(0xff)
+                recv_voice_data(payload[1:sep].decode(), payload[sep + 1:])
             else:
                 event = orjson.loads(payload)
 
@@ -61,12 +62,12 @@ def main():
             LOGGER.warning("Exception in listener loop:\n%s", traceback.format_exc())
 
 
-def set_preset(user_id: str, preset: Dict[str, Any]):
-    LOGGER.debug("Received set preset for user: %s", user_id)
-    cached_pipeline = cache.get(user_id)
+def set_preset(id: str, preset: Dict[str, Any]):
+    LOGGER.debug("Received set preset for user: %s", id)
+    cached_pipeline = cache.get(id)
     if cached_pipeline is None or cached_pipeline[1][0] != preset["id"]:
         # TODO: Make pipeline creation multithreaded
-        pipeline = cache.get(user_id) or Pipeline(
+        pipeline = cache.get(id) or Pipeline(
             "openai/whisper-base.en",
             preset["tts_model_name"],
             preset["tts_speaker_name"],
@@ -83,31 +84,30 @@ def set_preset(user_id: str, preset: Dict[str, Any]):
     else:
         pipeline = cached_pipeline[1][1]
     pipeline.start()
-    cache.add(user_id, (preset["id"], pipeline))
+    cache.add(id, pipeline)
 
-def remove_preset(user_id: str):
-    LOGGER.debug("Removing preset for user: %s", user_id)
-    cache.remove(user_id)
+def remove_preset(id: str):
+    LOGGER.debug("Removing preset for user: %s", id)
+    cache.remove(id)
 
 # TODO: cache entry may expire while user is still connected. handle this better
 # TODO: pipeline may not exist sometimes, add some way to handle that
-# TODO: I don't want to deal with refactoring again but user id is probably not the right name here
 # TODO: probably rethink error codes/standardize them at some point
-def recv_voice_data(user_id: str, data: bytes):
-    if cache.get(user_id) is None:
-        send_error(user_id, 0)
+def recv_voice_data(id: str, data: bytes):
+    if cache.get(id) is None:
+        send_error(id, 0)
         return
-    cache.get(user_id)[1][1].process_input(data, datetime.now(timezone.utc), user_id)
+    cache.get(id)[1].process_input(data, datetime.now(timezone.utc), id)
 
-def recv_text_data(user_id: str, data: str):
+def recv_text_data(id: str, data: str):
     # TODO: Error handling
-    if cache.get(user_id) is None:
-        send_error(user_id, 0)
+    if cache.get(id) is None:
+        send_error(id, 0)
         return
-    LOGGER.debug("Received text for user: %s", user_id)
-    cache.get(user_id)[1][1].process_input(data, datetime.now(timezone.utc), user_id)
+    LOGGER.debug("Received text for user: %s", id)
+    cache.get(id)[1].process_input(data, datetime.now(timezone.utc), id)
 
-def pipeline_callback(event: str, timestamp: datetime, result: Any, user_id: str):
+def pipeline_callback(event: str, timestamp: datetime, result: Any, id: str):
     match event:
         case "start":
             opcode = 5
@@ -124,21 +124,25 @@ def pipeline_callback(event: str, timestamp: datetime, result: Any, user_id: str
 
     send_queue.put(orjson.dumps({
         "op": opcode,
-        "id": user_id,
+        "id": id,
         "timestamp": timestamp,
         "data": result
     }))
 
     # Send wav separately to save on serialization time
     if opcode == 7:
-        payload = bytearray(1 + 16 + 16 + len(wav))
+        id_bytes = id.encode()
+        payload = bytearray(1 + len(id_bytes) + 1 + 16 + len(wav))
         pos = 0
         payload[pos] = 8
 
         pos += 1
-        payload[pos:pos + 16] = UUID(user_id).bytes
+        payload[pos:pos + len(id_bytes)] = id_bytes
 
-        pos += 16
+        pos += len(id_bytes)
+        payload[pos] = 0xff
+
+        pos += 1
         payload[pos:pos + 16] = result["wav_id"].bytes
 
         pos += 16
@@ -146,10 +150,11 @@ def pipeline_callback(event: str, timestamp: datetime, result: Any, user_id: str
         send_queue.put(bytes(payload))
 
 
-def send_error(user_id: str, error_code: int) -> None:
+def send_error(id: str, error_code: int) -> None:
+    LOGGER.info("Sending error to server: %i, %s", error_code, id)
     send_queue.put(orjson.dumps({
         "op": 0,
-        "id": user_id,
+        "id": id,
         "timestamp": datetime.now(timezone.utc),
         "data": error_code
     }))
