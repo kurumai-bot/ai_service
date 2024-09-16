@@ -189,7 +189,8 @@ class Pipeline:
                                 for expression in tts_output["expressions"]:
                                     expression = (expression[0] + wav_length, expression[1])
                                     expressions.append(expression)
-                                wav_length += tts_output["expressions"][-1][0] + 0.5
+                                if len(tts_output["expressions"]) > 0:
+                                    wav_length += tts_output["expressions"][-1][0] + 0.5
                             wav = np.concatenate([tts_output["wav"] for tts_output in tts_outputs])
 
                         res = {
