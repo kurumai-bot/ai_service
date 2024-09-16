@@ -65,9 +65,10 @@ def main():
 def set_preset(id: str, preset: Dict[str, Any]):
     LOGGER.debug("Received set preset for user: %s", id)
     cached_pipeline = cache.get(id)
-    if cached_pipeline is None or cached_pipeline[1][0] != preset["id"]:
+    item_set = set(preset.values())
+    if cached_pipeline is None or cached_pipeline[1][0] != item_set:
         # TODO: Make pipeline creation multithreaded
-        pipeline = cache.get(id) or Pipeline(
+        pipeline = Pipeline(
             "openai/whisper-base.en",
             preset["tts_model_name"],
             preset["tts_speaker_name"],
@@ -84,7 +85,7 @@ def set_preset(id: str, preset: Dict[str, Any]):
     else:
         pipeline = cached_pipeline[1][1]
     pipeline.start()
-    cache.add(id, pipeline)
+    cache.add(id, (item_set, pipeline))
 
 def remove_preset(id: str):
     LOGGER.debug("Removing preset for user: %s", id)
@@ -94,18 +95,20 @@ def remove_preset(id: str):
 # TODO: pipeline may not exist sometimes, add some way to handle that
 # TODO: probably rethink error codes/standardize them at some point
 def recv_voice_data(id: str, data: bytes):
-    if cache.get(id) is None:
+    cached_value = cache.get(id)
+    if cached_value is None:
         send_error(id, 0)
         return
-    cache.get(id)[1].process_input(data, datetime.now(timezone.utc), id)
+    cached_value[1][1].process_input(data, datetime.now(timezone.utc), id)
 
 def recv_text_data(id: str, data: str):
     # TODO: Error handling
-    if cache.get(id) is None:
+    cached_value = cache.get(id)
+    if cached_value is None:
         send_error(id, 0)
         return
     LOGGER.debug("Received text for user: %s", id)
-    cache.get(id)[1].process_input(data, datetime.now(timezone.utc), id)
+    cached_value[1][1].process_input(data, datetime.now(timezone.utc), id)
 
 def pipeline_callback(event: str, timestamp: datetime, result: Any, id: str):
     match event:
