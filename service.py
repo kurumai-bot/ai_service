@@ -4,6 +4,7 @@ from queue import Empty, Queue
 import traceback
 from typing import Any, Dict
 from uuid import uuid4
+import warnings
 
 import orjson
 import torch
@@ -11,6 +12,12 @@ import torch
 from ai import Pipeline
 from constants import AUTH_KEY, HF_API_KEY, HOST, LOGGER, OPENAI_API_KEY, PORT
 from utils import Cache
+
+
+# TODO: prob shld just redirect to log
+# Ignoring warnings since most of these are from libs that I can't change
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+warnings.filterwarnings("ignore", category=FutureWarning)
 
 
 cache = Cache(LOGGER.getChild("cache"))
